@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carte Industrie du Verre — Artelia Industrie</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --creux:   #1A4FA0;
+    --plat:    #0E8C5A;
+    --laine:   #C0560E;
+    --artelia: #7B2FBE;
+    --bg:      #F5F4F0;
+    --surface: #FFFFFF;
+    --border:  #E2E0D8;
+    --text:    #1C1C1A;
+    --muted:   #7A7870;
+  }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 11px 20px; display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+  .header-title h1 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+  .header-title p  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .badge { font-family: 'DM Mono', monospace; font-size: 10px; padding: 3px 8px; border-radius: 4px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; margin-left: auto; }
+  .main { display: flex; flex: 1; overflow: hidden; }
+  .sidebar { width: 230px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-section { padding: 14px 14px 10px; border-bottom: 1px solid var(--border); }
+  .section-label { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .filter-grid { display: flex; flex-direction: column; gap: 3px; }
+  .filter-btn { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 7px; border: 1px solid transparent; background: transparent; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--text); text-align: left; transition: background 0.12s; }
+  .filter-btn:hover { background: var(--bg); }
+  .filter-btn.active { background: var(--bg); border-color: var(--border); font-weight: 500; }
+  .filter-count { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); }
+  .legend-block { display: flex; flex-direction: column; gap: 8px; }
+  .legend-row { display: flex; align-items: center; gap: 9px; font-size: 11px; color: var(--text); }
+  .legend-shape { width: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .sites-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+  .site-item { padding: 7px 14px; cursor: pointer; border-left: 3px solid transparent; transition: background 0.1s; font-size: 12px; }
+  .site-item:hover { background: var(--bg); }
+  .site-name { font-weight: 500; }
+  .site-meta { font-size: 10px; color: var(--muted); margin-top: 1px; font-family: 'DM Mono', monospace; }
+  .no-results { padding: 20px 14px; font-size: 12px; color: var(--muted); text-align: center; }
+  .sites-list::-webkit-scrollbar { width: 4px; }
+  .sites-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  #map { flex: 1; }
+  .leaflet-popup-content-wrapper { border-radius: 10px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.11) !important; border: 1px solid var(--border) !important; padding: 0 !important; overflow: hidden; font-family: 'DM Sans', sans-serif !important; min-width: 180px; }
+  .leaflet-popup-content { margin: 0 !important; width: auto !important; }
+  .leaflet-popup-tip, .leaflet-popup-close-button { display: none !important; }
+  .popup-inner { padding: 10px 13px; }
+  .popup-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .popup-acteur { font-size: 10px; font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.05em; }
+  .popup-segment { font-size: 11px; color: var(--muted); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-title">
+    <h1>Industrie du Verre — Sites de production</h1>
+    <p>~49 sites · France & Belgique · Source : ADEME / GEREP / Sites officiels</p>
+  </div>
+  <span class="badge">Artelia Industrie · 2026</span>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="section-label">Filtres</div>
+      <div class="filter-grid">
+        <button class="filter-btn active" data-filter="all">
+          <svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="#888"/></svg>
+          Tous les sites
+          <span class="filter-count" id="count-all"></span>
+        </button>
+        <button class="filter-btn" data-filter="creux">
+          <svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="var(--creux)"/></svg>
+          Verre creux
+          <span class="filter-count" id="count-creux"></span>
+        </button>
+        <button class="filter-btn" data-filter="plat">
+          <svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="var(--plat)"/></svg>
+          Verre plat
+          <span class="filter-count" id="count-plat"></span>
+        </button>
+        <button class="filter-btn" data-filter="laine">
+          <svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="var(--laine)"/></svg>
+          Laine de verre
+          <span class="filter-count" id="count-laine"></span>
+        </button>
+        <button class="filter-btn" data-filter="artelia">
+          <svg width="12" height="12"><polygon points="6,1 11,11 1,11" fill="var(--artelia)"/></svg>
+          Artelia Industrie
+          <span class="filter-count" id="count-artelia"></span>
+        </button>
+        <button class="filter-btn" data-filter="verre" style="margin-top:6px; padding-top:10px; border-top:1px solid var(--border);">
+          <svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="#555"/></svg>
+          Tous sites verriers
+          <span class="filter-count" id="count-verre"></span>
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-label">Légende</div>
+      <div class="legend-block">
+        <div class="legend-row">
+          <div class="legend-shape"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="var(--creux)" stroke="white" stroke-width="1.5"/></svg></div>
+          <span>Verre creux</span>
+        </div>
+        <div class="legend-row">
+          <div class="legend-shape"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="var(--plat)" stroke="white" stroke-width="1.5"/></svg></div>
+          <span>Verre plat</span>
+        </div>
+        <div class="legend-row">
+          <div class="legend-shape"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="var(--laine)" stroke="white" stroke-width="1.5"/></svg></div>
+          <span>Laine de verre</span>
+        </div>
+        <div class="legend-row" style="margin-top:4px; padding-top:8px; border-top:1px solid var(--border);">
+          <div class="legend-shape"><svg width="14" height="14"><polygon points="7,1 13,13 1,13" fill="var(--artelia)" stroke="white" stroke-width="1"/></svg></div>
+          <span>Artelia Industrie</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="padding-bottom:6px; flex-shrink:0;">
+      <div class="section-label">Sites (<span id="list-count">—</span>)</div>
+    </div>
+    <div class="sites-list" id="sitesList"></div>
+
+  </div>
+  <div id="map"></div>
+</div>
+
+<script>
+const COLORS = { creux:'#1A4FA0', plat:'#0E8C5A', laine:'#C0560E', artelia:'#7B2FBE' };
+
+const SITES = [
+  // ── VERRE CREUX ──────────────────────────────────────────
+  { id:'oi-beziers',      nom:'Béziers',                          acteur:'O-I Manufacturing France', segment:'creux', dept:'Hérault (34)',          lat:43.3476, lng:3.2137 },
+  { id:'oi-gironcourt',   nom:'Gironcourt-sur-Vraine',            acteur:'O-I Manufacturing France', segment:'creux', dept:'Vosges (88)',            lat:48.2847, lng:5.9403 },
+  { id:'oi-reims',        nom:'Reims',                            acteur:'O-I Manufacturing France', segment:'creux', dept:'Marne (51)',             lat:49.2628, lng:3.9936 },
+  { id:'oi-gensac',       nom:'Gensac-la-Pallue',                 acteur:'O-I Manufacturing France', segment:'creux', dept:'Charente (16)',          lat:45.6747, lng:-0.2019 },
+  { id:'oi-vayres',       nom:'Vayres',                           acteur:'O-I Manufacturing France', segment:'creux', dept:'Gironde (33)',           lat:44.9008, lng:-0.3331 },
+  { id:'oi-labegude',     nom:'Labégude',                         acteur:'O-I Manufacturing France', segment:'creux', dept:'Ardèche (07)',           lat:44.6258, lng:4.3514 },
+  { id:'oi-veauche',      nom:'Veauche',                          acteur:'O-I Manufacturing France', segment:'creux', dept:'Loire (42)',             lat:45.5508, lng:4.2847 },
+  { id:'oi-puyguillaume', nom:'Puy-Guillaume',                    acteur:'O-I Manufacturing France', segment:'creux', dept:'Puy-de-Dôme (63)',       lat:45.9542, lng:3.4786 },
+  { id:'oi-wingles',      nom:'Wingles',                          acteur:'O-I Manufacturing France', segment:'creux', dept:'Pas-de-Calais (62)',     lat:50.4897, lng:2.8508 },
+  { id:'ver-oiry',        nom:'Oiry',                             acteur:'Verallia France',          segment:'creux', dept:'Marne (51)',             lat:48.9447, lng:3.8994 },
+  { id:'ver-lagnieu',     nom:'Lagnieu',                          acteur:'Verallia France',          segment:'creux', dept:'Ain (01)',               lat:45.9047, lng:5.3408 },
+  { id:'ver-chateau',     nom:'Châteaubernard',                   acteur:'Verallia France',          segment:'creux', dept:'Charente (16)',          lat:45.6519, lng:-0.3236 },
+  { id:'ver-chalon',      nom:'Chalon-sur-Saône',                 acteur:'Verallia France',          segment:'creux', dept:'Saône-et-Loire (71)',    lat:46.7817, lng:4.8528 },
+  { id:'ver-cuffies',     nom:'Cuffies',                          acteur:'Verallia France',          segment:'creux', dept:'Aisne (02)',             lat:49.4161, lng:3.3572 },
+  { id:'ver-stromain',    nom:'Saint-Romain-le-Puy',             acteur:'Verallia France',          segment:'creux', dept:'Loire (42)',             lat:45.5297, lng:4.1164 },
+  { id:'ver-albi',        nom:'Albi',                             acteur:'Verallia France',          segment:'creux', dept:'Tarn (81)',              lat:43.9253, lng:2.1480 },
+  { id:'sav-feuquieres',  nom:'Feuquières',                      acteur:'Saverglass',               segment:'creux', dept:'Oise (60)',              lat:49.6128, lng:1.8453 },
+  { id:'sav-havre',       nom:'Le Havre',                         acteur:'Saverglass',               segment:'creux', dept:'Seine-Maritime (76)',    lat:49.4938, lng:0.1072 },
+  { id:'sav-arques',      nom:'Arques',                           acteur:'Saverglass',               segment:'creux', dept:'Pas-de-Calais (62)',     lat:50.7358, lng:2.3014 },
+  { id:'sav-ghlin',       nom:'Ghlin',                            acteur:'Saverglass',               segment:'creux', dept:'Hainaut (BE)',           lat:50.4619, lng:3.9128 },
+  { id:'arc-arques',      nom:'Arques',                           acteur:'Arc International',        segment:'creux', dept:'Pas-de-Calais (62)',     lat:50.7258, lng:2.2914 },
+  { id:'lmfv-chateauroux',nom:'Châteauroux',                     acteur:'LMFV — Pyrex',             segment:'creux', dept:'Indre (36)',             lat:46.8117, lng:1.6911 },
+  { id:'lmfv-chapelle',   nom:'La Chapelle-Saint-Mesmin',        acteur:'LMFV — Duralex',           segment:'creux', dept:'Loiret (45)',            lat:47.8886, lng:1.8419 },
+  { id:'ver2-mers',       nom:'Mers-les-Bains',                  acteur:'Verescence',               segment:'creux', dept:'Somme (80)',             lat:50.0683, lng:1.3947 },
+  { id:'poc-hodeng',      nom:'Hodeng-au-Bosc',                  acteur:'Pochet du Courval',        segment:'creux', dept:'Seine-Maritime (76)',    lat:49.7461, lng:1.5297 },
+  { id:'sgd-sqlm',        nom:'Saint-Quentin-la-Motte-Croix-au-Bailly', acteur:'SGD Pharma',       segment:'creux', dept:'Somme (80)',             lat:50.0736, lng:1.4253 },
+  { id:'zig-bresle',      nom:'Vieux-Rouen-sur-Bresle',          acteur:'Zignago Vetro',            segment:'creux', dept:'Seine-Maritime (76)',    lat:49.7706, lng:1.5822 },
+  { id:'sto-masnieres',   nom:'Masnières',                       acteur:'Stoelzle',                 segment:'creux', dept:'Nord (59)',              lat:50.1233, lng:3.2017 },
+  { id:'bor-stsulpice',   nom:'Saint-Sulpice-la-Pointe',        acteur:'Bormioli Pharma',          segment:'creux', dept:'Tarn (81)',              lat:43.7753, lng:1.6825 },
+  { id:'nip-aumale',      nom:'Aumale',                           acteur:'Nipro Pharmapackaging',    segment:'creux', dept:'Seine-Maritime (76)',    lat:49.7711, lng:1.7572 },
+  { id:'via-vianne',      nom:'Vianne',                           acteur:'La Verrerie de Vianne',    segment:'creux', dept:'Lot-et-Garonne (47)',    lat:44.1894, lng:0.3283 },
+  { id:'roc-passavant',   nom:'Passavant-la-Rochère',            acteur:'La Rochère',               segment:'creux', dept:'Haute-Saône (70)',       lat:47.8619, lng:6.3247 },
+
+  // ── VERRE PLAT ───────────────────────────────────────────
+  { id:'agc-boussois',    nom:'Boussois',                         acteur:'AGC Glass Europe',         segment:'plat',  dept:'Nord (59)',              lat:50.2636, lng:4.0472 },
+  { id:'agc-seingbouse',  nom:'Seingbouse',                       acteur:'AGC Glass Europe',         segment:'plat',  dept:'Moselle (57)',           lat:49.1753, lng:6.8897 },
+  { id:'agc-moustier',    nom:'Moustier',                         acteur:'AGC Glass Europe',         segment:'plat',  dept:'Hainaut (BE)',           lat:50.4981, lng:4.6119 },
+  { id:'sgg-aniche',      nom:'Aniche',                           acteur:'Saint-Gobain Glass France',segment:'plat',  dept:'Nord (59)',              lat:50.3253, lng:3.2481 },
+  { id:'sgg-emerch',      nom:'Émerchicourt',                    acteur:'Saint-Gobain Glass France',segment:'plat',  dept:'Nord (59)',              lat:50.3319, lng:3.2519 },
+  { id:'sgg-thourotte',   nom:'Thourotte',                        acteur:'Saint-Gobain Glass France',segment:'plat',  dept:'Oise (60)',              lat:49.4628, lng:2.8436 },
+  { id:'euf-salaise',     nom:'Salaise-sur-Sanne',               acteur:'Eurofloat',                segment:'plat',  dept:'Isère (38)',             lat:45.3533, lng:4.8206 },
+  { id:'eug-hombourg',    nom:'Hombourg',                         acteur:'Euroglas',                 segment:'plat',  dept:'Haut-Rhin (68)',         lat:47.7461, lng:7.4597 },
+
+  // ── LAINE DE VERRE ───────────────────────────────────────
+  { id:'iso-orange',      nom:'Orange',                           acteur:'Isover (Saint-Gobain)',    segment:'laine', dept:'Vaucluse (84)',          lat:44.1386, lng:4.8081 },
+  { id:'iso-chemille',    nom:'Chemillé-en-Anjou',               acteur:'Isover (Saint-Gobain)',    segment:'laine', dept:'Maine-et-Loire (49)',    lat:47.2153, lng:-0.7261 },
+  { id:'iso-chalon',      nom:'Chalon-sur-Saône',                acteur:'Isover (Saint-Gobain)',    segment:'laine', dept:'Saône-et-Loire (71)',    lat:46.7717, lng:4.8628 },
+  { id:'oc-laudun',       nom:'Laudun-l\'Ardoise',               acteur:'Owens Corning',            segment:'laine', dept:'Gard (30)',              lat:44.1067, lng:4.6583 },
+  { id:'oc-tessenderlo',  nom:'Tessenderlo',                      acteur:'Owens Corning',            segment:'laine', dept:'Limbourg (BE)',          lat:51.0664, lng:5.0853 },
+  { id:'kna-lannemezan',  nom:'Lannemezan',                       acteur:'Knauf Insulation',         segment:'laine', dept:'Hautes-Pyrénées (65)',   lat:43.1264, lng:0.3814 },
+  { id:'kna-vise',        nom:'Visé',                             acteur:'Knauf Insulation',         segment:'laine', dept:'Liège (BE)',             lat:50.7369, lng:5.7014 },
+  { id:'urs-stavold',     nom:'Saint-Avold',                      acteur:'URSA',                     segment:'laine', dept:'Moselle (57)',           lat:49.1042, lng:6.7000 },
+
+  // ── ARTELIA INDUSTRIE ────────────────────────────────────
+  { id:'a-aix',          nom:'Aix-en-Provence',        acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:43.529, lng:5.447 },
+  { id:'a-amiens',       nom:'Amiens',                 acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:49.894, lng:2.302 },
+  { id:'a-annecy',       nom:'Annecy',                 acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:45.899, lng:6.129 },
+  { id:'a-brest',        nom:'Brest',                  acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:48.390, lng:-4.486 },
+  { id:'a-chambery',     nom:'Chambéry',               acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:45.564, lng:5.917 },
+  { id:'a-chatellerault',nom:'Châtellerault',           acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:46.818, lng:0.546 },
+  { id:'a-cherbourg',    nom:'Cherbourg',              acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:49.633, lng:-1.622 },
+  { id:'a-dijon',        nom:'Dijon',                  acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:47.322, lng:5.041 },
+  { id:'a-dreux',        nom:'Dreux',                  acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:48.737, lng:1.366 },
+  { id:'a-dunkerque',    nom:'Dunkerque',              acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:51.035, lng:2.377 },
+  { id:'a-fos',          nom:'Fos-sur-Mer',            acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:43.435, lng:4.944 },
+  { id:'a-grenoble',     nom:'Grenoble',               acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:45.188, lng:5.724 },
+  { id:'a-lehavre',      nom:'Le Havre ★',             acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:49.493, lng:0.108 },
+  { id:'a-lemans',       nom:'Le Mans',                acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:48.006, lng:0.199 },
+  { id:'a-lille',        nom:'Lille',                  acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:50.629, lng:3.057 },
+  { id:'a-lorient',      nom:'Lorient',                acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:47.749, lng:-3.367 },
+  { id:'a-lyon',         nom:'Lyon',                   acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:45.748, lng:4.843 },
+  { id:'a-martigues',    nom:'Martigues',              acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:43.405, lng:5.049 },
+  { id:'a-maubeuge',     nom:'Maubeuge',               acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:50.277, lng:3.973 },
+  { id:'a-melun',        nom:'Melun',                  acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:48.540, lng:2.659 },
+  { id:'a-montpellier',  nom:'Montpellier',            acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:43.611, lng:3.877 },
+  { id:'a-monthey',      nom:'Monthey',                acteur:'Artelia Industrie', segment:'artelia', dept:'Suisse',   lat:46.255, lng:6.952 },
+  { id:'a-mulhouse',     nom:'Mulhouse',               acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:47.750, lng:7.336 },
+  { id:'a-nimes',        nom:'Nîmes',                  acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:43.836, lng:4.360 },
+  { id:'a-pau',          nom:'Pau',                    acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:43.296, lng:-0.370 },
+  { id:'a-pierrelatte',  nom:'Pierrelatte',            acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:44.377, lng:4.692 },
+  { id:'a-portjerome',   nom:'Port-Jérôme-sur-Seine',  acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:49.490, lng:0.574 },
+  { id:'a-rouen',        nom:'Rouen',                  acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:49.443, lng:1.100 },
+  { id:'a-saintavold',   nom:'Saint-Avold',            acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:49.103, lng:6.700 },
+  { id:'a-saintnazaire', nom:'Saint-Nazaire',          acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:47.273, lng:-2.213 },
+  { id:'a-saintouen',    nom:'Saint-Ouen-sur-Seine',   acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:48.913, lng:2.334 },
+  { id:'a-tarbes',       nom:'Tarbes',                 acteur:'Artelia Industrie', segment:'artelia', dept:'France',   lat:43.232, lng:0.078 },
+  { id:'a-wavre',        nom:'Wavre',                  acteur:'Artelia Industrie', segment:'artelia', dept:'Belgique', lat:50.718, lng:4.612 },
+];
+
+const map = L.map('map').setView([48.0, 3.5], 6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 14
+}).addTo(map);
+
+function makeIcon(s) {
+  const c = COLORS[s.segment];
+  let svg;
+  if (s.segment === 'artelia') {
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+      <polygon points="8,1 15,15 1,15" fill="${c}" stroke="white" stroke-width="1.5"/>
+    </svg>`;
+    return L.divIcon({ html: svg, className: '', iconSize: [16,16], iconAnchor: [8,15], popupAnchor: [0,-12] });
+  } else {
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14">
+      <circle cx="7" cy="7" r="6" fill="${c}" stroke="white" stroke-width="1.5"/>
+    </svg>`;
+    return L.divIcon({ html: svg, className: '', iconSize: [14,14], iconAnchor: [7,7], popupAnchor: [0,-10] });
+  }
+}
+
+const segmentLabel = { creux:'Verre creux', plat:'Verre plat', laine:'Laine de verre', artelia:'Artelia Industrie' };
+
+function makePopup(s) {
+  const c = COLORS[s.segment];
+  return `<div class="popup-inner">
+    <div class="popup-name">${s.nom}</div>
+    <div class="popup-acteur" style="color:${c}">${s.acteur}</div>
+    <div class="popup-segment">${segmentLabel[s.segment]} · ${s.dept}</div>
+  </div>`;
+}
+
+const markersMap = {};
+SITES.forEach(s => {
+  const m = L.marker([s.lat, s.lng], { icon: makeIcon(s) })
+    .bindPopup(makePopup(s), { maxWidth: 240, minWidth: 180 });
+  markersMap[s.id] = { marker: m, site: s, visible: true };
+});
+
+function matchFilter(s, f) {
+  if (f === 'verre') return s.segment !== 'artelia';
+  if (f === 'all') return true;
+  if (f === 'verre') return s.segment !== 'artelia';
+  return s.segment === f;
+}
+
+function updateCounts() {
+  ['all','verre','creux','plat','laine','artelia'].forEach(f => {
+    const el = document.getElementById('count-' + f);
+    if (el) el.textContent = SITES.filter(s => matchFilter(s, f)).length;
+  });
+}
+
+function renderList(filter) {
+  const list = document.getElementById('sitesList');
+  const filtered = SITES.filter(s => matchFilter(s, filter));
+  document.getElementById('list-count').textContent = filtered.length;
+  if (!filtered.length) { list.innerHTML = '<div class="no-results">Aucun site</div>'; return; }
+  list.innerHTML = filtered.map(s => {
+    const c = COLORS[s.segment];
+    return `<div class="site-item" data-id="${s.id}" style="border-left-color:${c}">
+      <div class="site-name">${s.nom}</div>
+      <div class="site-meta">${s.acteur}</div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.site-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const e = markersMap[el.dataset.id];
+      if (e && e.visible) {
+        map.setView([e.site.lat, e.site.lng], 11, { animate: true });
+        setTimeout(() => e.marker.openPopup(), 350);
+      }
+    });
+  });
+}
+
+function applyFilter(filter) {
+  Object.values(markersMap).forEach(({ marker, site }) => {
+    const show = matchFilter(site, filter);
+    show ? (!map.hasLayer(marker) && marker.addTo(map)) : (map.hasLayer(marker) && map.removeLayer(marker));
+    markersMap[site.id].visible = show;
+  });
+  renderList(filter);
+}
+
+updateCounts();
+applyFilter('all');
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    applyFilter(this.dataset.filter);
+  });
+});
+</script>
+</body>
+</html>
